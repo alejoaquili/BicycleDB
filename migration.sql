@@ -34,8 +34,8 @@ CREATE OR REPLACE FUNCTION removeInvalidNullFieldsAndTimeUseInvalidFormat() RETU
 	IS NOT NULL and destino_estacion IS NOT NULL and tiempo_uso IS NOT NULL 
 	and (tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
 	tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG' or
-	tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
-	tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG');
+	tiempo_uso LIKE '__H _MIN _SEG' or tiempo_uso LIKE '__H _MIN __SEG' or
+	tiempo_uso LIKE '__H __MIN _SEG' or tiempo_uso LIKE '__H __MIN __SEG');
 END; 
 $$ LANGUAGE plpgsql;
 
