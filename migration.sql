@@ -8,8 +8,6 @@ DESTINO_ESTACION INTEGER,
 NOMBRE_DESTINO TEXT,
 TIEMPO_USO TEXT
 );
-drop table recorrido_bridge;
-drop table recorrido_view;
 
 create table recorrido_temp(
 PERIODO INTEGER,
@@ -36,8 +34,8 @@ CREATE OR REPLACE FUNCTION removeInvalidNullFieldsAndTimeUseInvalidFormat() RETU
 	IS NOT NULL and destino_estacion IS NOT NULL and tiempo_uso IS NOT NULL 
 	and (tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
 	tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG' or
-	tiempo_uso LIKE '__H _MIN _SEG' or tiempo_uso LIKE '__H _MIN __SEG' or
-	tiempo_uso LIKE '__H __MIN _SEG' or tiempo_uso LIKE '__H __MIN __SEG');
+	tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
+	tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG');
 END; 
 $$ LANGUAGE plpgsql;
 
@@ -60,48 +58,45 @@ CREATE OR REPLACE FUNCTION castTimeUsedToInterval() RETURNS VOID as $$
 	 position('M' in TIEMPO_USO) - (position('H' in TIEMPO_USO) + 2)) || 'min') :: interval
 	 +(SUBSTRING(TIEMPO_USO, position('M' in TIEMPO_USO) + 4, position('S' in TIEMPO_USO) - (position('M' in TIEMPO_USO) + 4)) || 'second'):: interval) as TIEMPO_USO
 	from recorrido_bridge
-	Where TIEMPO_USO not like '-%';
+	Where TIEMPO_USO not like '-%' and (ID_USUARIO, FECHA_HORA_RETIRO) NOT IN (SELECT ID_USUARIO, FECHA_HORA_RETIRO FROM recorrido_bridge
+	GROUP BY ID_USUARIO, FECHA_HORA_RETIRO HAVING count(*) > 1 );
 	
 END; 
 $$ LANGUAGE plpgsql;
+
 
 CREATE OR REPLACE FUNCTION saveSecondTupple
 (RUSUARIO_ID recorrido_temp.ID_USUARIO%TYPE,
 RFECHA recorrido_temp.FECHA_HORA_RETIRO%TYPE) RETURNS VOID AS $$
 DECLARE
 CKEY CURSOR FOR
-SELECT * FROM recorrido_temp
+SELECT * FROM recorrido_bridge
 where ID_USUARIO = RUSUARIO_ID and FECHA_HORA_RETIRO = RFECHA;
 
 RCKEY RECORD;
-INDEX  INTEGER;
 BEGIN
   OPEN CKEY;
   FETCH CKEY INTO RCKEY;
-  INDEX := 1;
-  LOOP
-    FETCH CKEY INTO RCKEY;
-    EXIT WHEN NOT FOUND;
-    IF INDEX != 2 THEN
-    	INDEX := INDEX + 1;
-    	DELETE FROM recorrido_temp
-		  WHERE ID_USUARIO = RUSUARIO_ID and fecha_hora_retiro = RFECHA
-      and RCKEY.PERIODO = PERIODO and RCKEY.ORIGEN_ESTACION = ORIGEN_ESTACION 
-      and RCKEY.NOMBRE_ORIGEN = NOMBRE_ORIGEN and RCKEY.DESTINO_ESTACION = DESTINO_ESTACION
-      and RCKEY.NOMBRE_DESTINO = NOMBRE_DESTINO;
-      ELSE
-      INDEX := INDEX + 1;
-    END IF;
-  END LOOP;
+  EXIT WHEN NOT FOUND;
+  FETCH CKEY INTO RCKEY;
+  INSERT INTO recorrido_temp(PERIODO, ID_USUARIO, FECHA_HORA_RETIRO,
+	ORIGEN_ESTACION, NOMBRE_ORIGEN, DESTINO_ESTACION, NOMBRE_DESTINO,
+	TIEMPO_USO) values(RCKEY.PERIODO, RCKEY.ID_USUARIO, RCKEY.FECHA_HORA_RETIRO, RCKEY. ORIGEN_ESTACION, RCKEY.NOMBRE_ORIGEN, RCKEY.DESTINO_ESTACION, RCKEY.NOMBRE_DESTINO, 
+  ((SUBSTRING(RCKEY.TIEMPO_USO, 0, position('H' in RCKEY.TIEMPO_USO)) || 'hours') :: interval
+	+ (SUBSTRING(RCKEY.TIEMPO_USO, position('H' in RCKEY.TIEMPO_USO) + 2, 
+	 position('M' in RCKEY.TIEMPO_USO) - (position('H' in RCKEY.TIEMPO_USO) + 2)) || 'min') :: interval
+	 +(SUBSTRING(RCKEY.TIEMPO_USO, position('M' in RCKEY.TIEMPO_USO) + 4, position('S' in RCKEY.TIEMPO_USO) - (position('M' in RCKEY.TIEMPO_USO) + 4)) || 'second'):: interval));
   CLOSE CKEY;
+  RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
+
 
 CREATE OR REPLACE FUNCTION removeRepeatedKeys() RETURNS VOID
 AS $$
 DECLARE
 CKEYS CURSOR FOR
-SELECT ID_USUARIO, FECHA_HORA_RETIRO FROM recorrido_temp
+SELECT ID_USUARIO, FECHA_HORA_RETIRO FROM recorrido_bridge
 GROUP BY ID_USUARIO, FECHA_HORA_RETIRO HAVING count(*) > 1;
 RCKEYS RECORD;
 BEGIN
@@ -112,9 +107,9 @@ BEGIN
     PERFORM saveSecondTupple(RCKEYS.ID_USUARIO, RCKEYS.FECHA_HORA_RETIRO);
   END LOOP;
   CLOSE CKEYS;
+  RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
-
 
 
 
@@ -126,5 +121,5 @@ CREATE OR REPLACE FUNCTION migracion () RETURNS VOID as $$
 END; 
 $$ LANGUAGE plpgsql;
 
+
 select migracion();
-select id_usuario, fecha_hora_retiro from recorrido_view group by id_usuario, fecha_hora_retiro having count(*) > 1;
