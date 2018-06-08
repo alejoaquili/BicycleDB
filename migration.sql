@@ -1,41 +1,126 @@
-CREATE OR REPLACE FUNCTION removeInvalidNullFields() RETURNS VOID as $$
+create table recorrido_bridge(
+PERIODO INTEGER,
+ID_USUARIO INTEGER,
+FECHA_HORA_RETIRO TIMESTAMP,
+ORIGEN_ESTACION INTEGER,
+NOMBRE_ORIGEN TEXT,
+DESTINO_ESTACION INTEGER,
+NOMBRE_DESTINO TEXT,
+TIEMPO_USO TEXT
+);
+
+create table recorrido_view(
+PERIODO INTEGER,
+ID_USUARIO INTEGER,
+FECHA_HORA_RETIRO TIMESTAMP,
+ORIGEN_ESTACION INTEGER,
+NOMBRE_ORIGEN TEXT,
+DESTINO_ESTACION INTEGER,
+NOMBRE_DESTINO TEXT,
+TIEMPO_USO INTERVAL
+);
+
+CREATE OR REPLACE FUNCTION removeInvalidNullFieldsAndTimeUseInvalidFormat() RETURNS VOID as $$
 	
 	BEGIN
-	DELETE FROM recorrido_temp
-	WHERE id_usuario isNULL or fecha_hora_retiro isNULL or origen_estacion
- 	isNULL or destino_estacion isNULL or tiempo_uso isNULL;
+	INSERT INTO recorrido_bridge(PERIODO, ID_USUARIO, FECHA_HORA_RETIRO,
+	ORIGEN_ESTACION, NOMBRE_ORIGEN, DESTINO_ESTACION, NOMBRE_DESTINO,
+	TIEMPO_USO)
+	SELECT PERIODO, ID_USUARIO, FECHA_HORA_RETIRO,
+	ORIGEN_ESTACION, NOMBRE_ORIGEN, DESTINO_ESTACION, NOMBRE_DESTINO,
+	TIEMPO_USO
+	FROM recorrido_import
+	WHERE id_usuario IS NOT NULL and fecha_hora_retiro IS NOT NULL and origen_estacion
+	IS NOT NULL and destino_estacion IS NOT NULL and tiempo_uso IS NOT NULL 
+	and (tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
+	tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG' or
+	tiempo_uso LIKE '__H _MIN _SEG' or tiempo_uso LIKE '__H _MIN __SEG' or
+	tiempo_uso LIKE '__H __MIN _SEG' or tiempo_uso LIKE '__H __MIN __SEG');
 END; 
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION castTimeUsedToInterval() RETURNS VOID as $$
 	
 	BEGIN
-	CREATE VIEW recorrido_view AS
+	INSERT INTO recorrido_view(PERIODO, ID_USUARIO, FECHA_HORA_RETIRO,
+	ORIGEN_ESTACION, NOMBRE_ORIGEN, DESTINO_ESTACION, NOMBRE_DESTINO,
+	TIEMPO_USO)
+	select PERIODO,
+	ID_USUARIO,
+	FECHA_HORA_RETIRO,
+	ORIGEN_ESTACION,
+	NOMBRE_ORIGEN,
+	DESTINO_ESTACION,
+	NOMBRE_DESTINO,
 
-select PERIODO,
-ID_USUARIO,
-FECHA_HORA_RETIRO,
-ORIGEN_ESTACION,
-NOMBRE_ORIGEN,
-DESTINO_ESTACION,
-NOMBRE_DESTINO,
-
-((SUBSTRING(TIEMPO_USO, 0, position('H' in TIEMPO_USO)) || 'hours') :: interval
-+ (SUBSTRING(TIEMPO_USO, position('H' in TIEMPO_USO) + 2, 
- position('M' in TIEMPO_USO) - (position('H' in TIEMPO_USO) + 2)) || 'min') :: interval
- +(SUBSTRING(TIEMPO_USO, position('M' in TIEMPO_USO) + 4, position('S' in TIEMPO_USO) - (position('M' in TIEMPO_USO) + 4)) || 'second'):: interval) as TIEMPO_USO
- 
-,FECHA_CREACION
-from recorrido_temp
-Where TIEMPO_USO not like '-%';
+	((SUBSTRING(TIEMPO_USO, 0, position('H' in TIEMPO_USO)) || 'hours') :: interval
+	+ (SUBSTRING(TIEMPO_USO, position('H' in TIEMPO_USO) + 2, 
+	 position('M' in TIEMPO_USO) - (position('H' in TIEMPO_USO) + 2)) || 'min') :: interval
+	 +(SUBSTRING(TIEMPO_USO, position('M' in TIEMPO_USO) + 4, position('S' in TIEMPO_USO) - (position('M' in TIEMPO_USO) + 4)) || 'second'):: interval) as TIEMPO_USO
+	from recorrido_bridge
+	Where TIEMPO_USO not like '-%';
 	
 END; 
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION saveSecondTupple
+(RUSUARIO_ID recorrido_view.ID_USUARIO%TYPE,
+RFECHA recorrido_view.FECHA_HORA_RETIRO%TYPE) RETURNS VOID AS $$
+DECLARE
+CKEY CURSOR FOR
+SELECT * FROM recorrido_view
+where ID_USUARIO = RUSUARIO_ID and FECHA_HORA_RETIRO = RFECHA;
+
+RCKEY RECORD;
+INDEX  INTEGER;
+BEGIN
+  OPEN CKEY;
+  FETCH CKEY INTO RCKEY;
+  INDEX := 1;
+  LOOP
+    FETCH CKEY INTO RCKEY;
+    EXIT WHEN NOT FOUND;
+    IF INDEX != 2 THEN
+    	INDEX := INDEX + 1;
+    	DELETE FROM recorrido_view
+		  WHERE ID_USUARIO = RUSUARIO_ID and fecha_hora_retiro = RFECHA
+      and RCKEY.PERIODO = PERIODO and RCKEY.ORIGEN_ESTACION = ORIGEN_ESTACION 
+      and RCKEY.NOMBRE_ORIGEN = NOMBRE_ORIGEN and RCKEY.DESTINO_ESTACION = DESTINO_ESTACION
+      and RCKEY.NOMBRE_DESTINO = NOMBRE_DESTINO;
+		ELSE
+      INDEX := INDEX + 1;
+    END IF;
+  END LOOP;
+  CLOSE CKEY;
+END;
+$$ LANGUAGE PLPGSQL;
+
+CREATE OR REPLACE FUNCTION removeRepeatedKeys() RETURNS VOID
+AS $$
+DECLARE
+CKEYS CURSOR FOR
+SELECT ID_USUARIO, FECHA_HORA_RETIRO FROM recorrido_view
+GROUP BY ID_USUARIO, FECHA_HORA_RETIRO HAVING count(*) > 1;
+RCKEYS RECORD;
+BEGIN
+  OPEN CKEYS;
+  LOOP
+    FETCH CKEYS INTO RCKEYS;
+    EXIT WHEN NOT FOUND;
+    PERFORM saveSecondTupple(RCKEYS.ID_USUARIO, RCKEYS.FECHA_HORA_RETIRO);
+  END LOOP;
+  CLOSE CKEYS;
+END;
+$$ LANGUAGE PLPGSQL;
+
+
+
+
 CREATE OR REPLACE FUNCTION migracion () RETURNS VOID as $$
 	BEGIN
-	perform removeInvalidNullFields();
-        perform castTimeUsedToInterval();
+	perform removeInvalidNullFieldsAndTimeUseInvalidFormat();
+	perform castTimeUsedToInterval();
+	perform removeRepeatedKeys();
 END; 
 $$ LANGUAGE plpgsql;
 
