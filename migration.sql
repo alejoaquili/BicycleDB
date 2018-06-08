@@ -8,6 +8,8 @@ DESTINO_ESTACION INTEGER,
 NOMBRE_DESTINO TEXT,
 TIEMPO_USO TEXT
 );
+drop table recorrido_bridge;
+drop table recorrido_view;
 
 create table recorrido_view(
 PERIODO INTEGER,
@@ -87,7 +89,7 @@ BEGIN
       and RCKEY.PERIODO = PERIODO and RCKEY.ORIGEN_ESTACION = ORIGEN_ESTACION 
       and RCKEY.NOMBRE_ORIGEN = NOMBRE_ORIGEN and RCKEY.DESTINO_ESTACION = DESTINO_ESTACION
       and RCKEY.NOMBRE_DESTINO = NOMBRE_DESTINO;
-		ELSE
+      ELSE
       INDEX := INDEX + 1;
     END IF;
   END LOOP;
@@ -125,3 +127,4 @@ END;
 $$ LANGUAGE plpgsql;
 
 select migracion();
+select id_usuario, fecha_hora_retiro from recorrido_view group by id_usuario, fecha_hora_retiro having count(*) > 1;
