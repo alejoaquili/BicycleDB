@@ -203,7 +203,7 @@ BEGIN
     EXIT WHEN NOT FOUND;
     PERFORM isum(rcuser.id_usuario);
 END LOOP;
-  CLOSE cuser;
+CLOSE cuser;
 END;
 $$ LANGUAGE PLPGSQL;
 
@@ -222,8 +222,42 @@ AS $$
 END; 
 $$ LANGUAGE PLPGSQL;
 
-/************************************************* EXECUTION *************************************************/
+CREATE OR REPLACE FUNCTION validate_intervals () RETURNS TRIGGER 
+AS $$
+DECLARE
+	cval CURSOR FOR
+	SELECT periodo, usuario, fecha_hora_ret , est_origen,
+	est_destino, fecha_hora_dev
+	FROM recorrido_final;
+	rcval RECORD;
+BEGIN
+	OPEN cval;
+	LOOP
+  		FETCH cval INTO rcval;
+    	IF new.fecha_hora_ret >= rcval.fecha_hora_ret
+    		AND new.fecha_hora_ret <= rcval.fecha_hora_dev THEN
+			  RAISE EXCEPTION 'INSERCION IMPOSIBLE POR SOLAPAMIENTO';
+		  END IF;
+	END LOOP;
+  CLOSE cval;
+	RETURN new;
+END;
+$$ LANGUAGE PLPGSQL;
+
+/************************************************* TRIGGERS **************************************************/
+
+DROP TRIGGER IF EXISTS detecta_solapado ON recorrido_final;
 
 SELECT migration ();
-SELECT * FROM recorrido_final
 
+CREATE TRIGGER detecta_solapado BEFORE INSERT 
+ON recorrido_final FOR EACH ROW
+EXECUTE PROCEDURE validate_intervals ();
+
+/************************************************* EXECUTION *************************************************/
+
+-- MIGRATION
+SELECT * FROM recorrido_final;
+
+-- TRIGGER-TEST
+INSERT INTO recorrido_final VALUES('201601', 7410, '2016-09-29 11:30:00', 23, 23, '2016-09-29 11:32:00');
