@@ -112,14 +112,88 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 
+CREATE OR REPLACE FUNCTION ISUM
+(RUSER_ID recorrido_temp.id_usuario%TYPE) RETURNS VOID AS $$
+DECLARE
+CTRAIL CURSOR FOR
+SELECT periodo, id_usuario, fecha_hora_retiro, origen_estacion,
+destino_estacion, tiempo_uso
+FROM recorrido_temp
+WHERE RUSER_ID = id_usuario
+ORDER BY fecha_hora_retiro ASC;
+
+RCTRAIL RECORD;
+STARTS  TIMESTAMP;
+ENDS    TIMESTAMP;
+GREATEST_TIME TIMESTAMP;
+FIRST_STATION INTEGER;
+LAST_STATION INTEGER;
+FIRST_PERIOD TEXT;
+
+BEGIN
+  OPEN CTRAIL;
+  FETCH CTRAIL INTO RCTRAIL;
+  STARTS := RCTRAIL.fecha_hora_retiro;
+  ENDS := RCTRAIL.fecha_hora_retiro + RCTRAIL.tiempo_uso;
+  FIRST_STATION := RCTRAIL.origen_estacion;
+  LAST_STATION := RCTRAIL.destino_estacion;
+  FIRST_PERIOD := RCTRAIL.periodo;
+  LOOP
+    FETCH CTRAIL INTO RCTRAIL;
+    EXIT WHEN NOT FOUND;
+    IF ENDS > RCTRAIL.fecha_hora_retiro THEN
+      LAST_STATION := RCTRAIL.destino_estacion;
+      ENDS := RCTRAIL.fecha_hora_retiro + RCTRAIL.tiempo_uso;
+    ELSE
+      INSERT INTO recorrido_final(periodo, usuario, fecha_hora_ret,
+      est_origen, est_destino, fecha_hora_dev)
+      values(FIRST_PERIOD, RUSER_ID, STARTS, FIRST_STATION, LAST_STATION, ENDS);
+      STARTS := RCTRAIL.fecha_hora_retiro;
+      ENDS := RCTRAIL.fecha_hora_retiro + RCTRAIL.tiempo_uso;
+      FIRST_STATION := RCTRAIL.origen_estacion;
+      LAST_STATION := RCTRAIL.destino_estacion;
+      FIRST_PERIOD := RCTRAIL.periodo;
+    END IF;
+  END LOOP;
+  INSERT INTO recorrido_final(periodo, usuario, fecha_hora_ret,
+  est_origen, est_destino, fecha_hora_dev)
+  values(FIRST_PERIOD, RUSER_ID, STARTS, FIRST_STATION, LAST_STATION, ENDS);
+  CLOSE CTRAIL;
+END;
+$$ LANGUAGE PLPGSQL;
+
+
+CREATE OR REPLACE FUNCTION removeIntervalOverlap() RETURNS VOID
+AS $$
+DECLARE
+CUSER CURSOR FOR
+SELECT id_usuario FROM recorrido_temp
+GROUP BY id_usuario;
+RCUSER RECORD;
+BEGIN
+  OPEN CUSER;
+  LOOP
+    FETCH CUSER INTO RCUSER;
+    EXIT WHEN NOT FOUND;
+    PERFORM ISUM(RCUSER.id_usuario);
+END LOOP;
+  CLOSE CUSER;
+END;
+$$ LANGUAGE PLPGSQL;
+
 
 CREATE OR REPLACE FUNCTION migracion () RETURNS VOID as $$
 	BEGIN
 	perform removeInvalidNullFieldsAndTimeUseInvalidFormat();
 	perform castTimeUsedToInterval();
 	perform removeRepeatedKeys();
+	perform removeIntervalOverlap();
 END; 
 $$ LANGUAGE plpgsql;
 
+delete from recorrido_final;
 
 select migracion();
+
+--select * from recorrido_final order by usuario ASC , fecha_hora_ret ASC;
+
