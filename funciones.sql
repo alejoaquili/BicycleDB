@@ -49,7 +49,7 @@ tiempo_uso        INTERVAL
 
 /***************************************************** FUNCTIONS *****************************************************/
 
-CREATE OR REPLACE FUNCTION removeInvalidNullFieldsAndTimeUseInvalidFormat () RETURNS VOID 
+CREATE OR REPLACE FUNCTION remove_invalid_null_fields_and_time_used_invalid_format () RETURNS VOID 
 AS $$
 	BEGIN
 	INSERT INTO recorrido_bridge (periodo, id_usuario, fecha_hora_retiro,
@@ -69,7 +69,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 
-CREATE OR REPLACE FUNCTION castTimeUsedToINTERVAL () RETURNS VOID 
+CREATE OR REPLACE FUNCTION cast_time_used_to_interval () RETURNS VOID 
 AS $$	
 	BEGIN
     INSERT INTO recorrido_temp (periodo, id_usuario, fecha_hora_retiro,
@@ -94,7 +94,7 @@ AS $$
 $$ LANGUAGE PLPGSQL;
 
 
-CREATE OR REPLACE FUNCTION saveSecondTupple (rusuario_id recorrido_temp.ID_USUARIO%TYPE,
+CREATE OR REPLACE FUNCTION save_second_tupple (rusuario_id recorrido_temp.ID_USUARIO%TYPE,
 rfecha recorrido_temp.FECHA_HORA_RETIRO%TYPE) RETURNS VOID 
 AS $$
 DECLARE
@@ -120,7 +120,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 
-CREATE OR REPLACE FUNCTION removeRepeatedKeys () RETURNS VOID
+CREATE OR REPLACE FUNCTION remove_repeated_keys () RETURNS VOID
 AS $$
 DECLARE
   ckeys CURSOR FOR
@@ -132,7 +132,7 @@ BEGIN
   LOOP
     FETCH ckeys INTO rckeys;
     EXIT WHEN NOT FOUND;
-    PERFORM saveSecondTupple (rckeys.id_usuario, rckeys.fecha_hora_retiro);
+    PERFORM save_second_tupple (rckeys.id_usuario, rckeys.fecha_hora_retiro);
   END LOOP;
   CLOSE ckeys;
   RETURN;
@@ -189,7 +189,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 
-CREATE OR REPLACE FUNCTION removeINTERVALOverlap () RETURNS VOID
+CREATE OR REPLACE FUNCTION remove_interval_overlap () RETURNS VOID
 AS $$
 DECLARE
   cuser CURSOR FOR
@@ -212,10 +212,10 @@ CREATE OR REPLACE FUNCTION migration () RETURNS VOID
 AS $$
 	BEGIN
 	DELETE FROM recorrido_final;
-	PERFORM removeInvalidNullFieldsAndTimeUseInvalidFormat ();
-	PERFORM castTimeUsedToINTERVAL ();
-	PERFORM removeRepeatedKeys ();
-	PERFORM removeINTERVALOverlap ();
+	PERFORM remove_invalid_null_fields_and_time_used_invalid_format ();
+	PERFORM cast_time_used_to_interval ();
+	PERFORM remove_repeated_keys ();
+	PERFORM remove_interval_overlap ();
 	DROP TABLE recorrido_bridge;
 	DROP TABLE recorrido_temp;
 	DROP TABLE recorrido_import;
