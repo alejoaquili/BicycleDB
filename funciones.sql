@@ -263,5 +263,6 @@ EXECUTE PROCEDURE validate_intervals ();
 SELECT * FROM recorrido_final;
 
 -- TRIGGER-TEST
-INSERT INTO recorrido_final VALUES('201601',8,'2016-01-18 16:28:00',23,23, '2016-01-13 20:28:00');
+INSERT INTO recorrido_final VALUES('201601',8,'2016-01-18 16:28:00',23,23, '2016-01-18 20:28:00');
 INSERT INTO recorrido_final VALUES('201601', 7410, '2016-09-29 11:30:00', 23, 23, '2016-09-29 11:32:00');
+select * FROM recorrido_final;
