@@ -9,6 +9,15 @@ NOMBRE_DESTINO TEXT,
 TIEMPO_USO TEXT
 );
 
+CREATE TABLE recorrido_final
+(periodo        TEXT,
+usuario         INTEGER,
+fecha_hora_ret  TIMESTAMP NOT NULL,
+est_origen      INTEGER NOT NULL,
+est_destino     INTEGER NOT NULL,
+fecha_hora_dev TIMESTAMP NOT NULL CHECK(fecha_hora_dev >= fecha_hora_ret),
+PRIMARY KEY(usuario,fecha_hora_ret));
+
 create table recorrido_temp(
 PERIODO INTEGER,
 ID_USUARIO INTEGER,
@@ -141,7 +150,7 @@ BEGIN
   LOOP
     FETCH CTRAIL INTO RCTRAIL;
     EXIT WHEN NOT FOUND;
-    IF ENDS > RCTRAIL.fecha_hora_retiro THEN
+    IF ENDS >= RCTRAIL.fecha_hora_retiro THEN
       LAST_STATION := RCTRAIL.destino_estacion;
       ENDS := RCTRAIL.fecha_hora_retiro + RCTRAIL.tiempo_uso;
     ELSE
@@ -184,16 +193,21 @@ $$ LANGUAGE PLPGSQL;
 
 CREATE OR REPLACE FUNCTION migracion () RETURNS VOID as $$
 	BEGIN
+	delete from recorrido_final;
 	perform removeInvalidNullFieldsAndTimeUseInvalidFormat();
 	perform castTimeUsedToInterval();
 	perform removeRepeatedKeys();
 	perform removeIntervalOverlap();
+	drop table recorrido_bridge;
+	drop table recorrido_temp;
+	drop table recorrido_import;
 END; 
 $$ LANGUAGE plpgsql;
 
-delete from recorrido_final;
 
 select migracion();
+
+select * from recorrido_final
 
 --select * from recorrido_final order by usuario ASC , fecha_hora_ret ASC;
 
