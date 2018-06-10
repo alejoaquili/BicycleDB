@@ -24,7 +24,7 @@ origen_estacion   INTEGER,
 nombre_origen     TEXT,
 destino_estacion  INTEGER,
 nombre_destino    TEXT,
-tiempo_uso        TEXT,
+tiempo_uso        TEXT
 );
 
 CREATE TABLE recorrido_final
