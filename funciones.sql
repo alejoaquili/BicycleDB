@@ -12,7 +12,7 @@ nombre_destino    TEXT,
 tiempo_uso        TEXT,
 fecha_creacion    TEXT
 );
-\COPY recorrido_import FROM './CSV Files/recorridos-realizados-2016.csv' CSV HEADER DELIMITER ';';
+\COPY recorrido_import FROM './CSV Files/test1.csv' CSV HEADER DELIMITER ';';
 
 /************************************************* DEFINITIONS *************************************************/
 
@@ -101,7 +101,8 @@ AS $$
 DECLARE
   ckey CURSOR FOR
   SELECT * FROM recorrido_bridge
-  WHERE id_usuario = rusuario_id AND fecha_hora_retiro = rfecha;
+  WHERE id_usuario = rusuario_id AND fecha_hora_retiro = rfecha
+  ORDER BY tiempo_uso ASC;
   rckey RECORD;
 BEGIN
   OPEN ckey;
