@@ -24,7 +24,7 @@ origen_estacion   INTEGER,
 nombre_origen     TEXT,
 destino_estacion  INTEGER,
 nombre_destino    TEXT,
-tiempo_uso        TEXT
+tiempo_uso        TEXT,
 );
 
 CREATE TABLE recorrido_final
@@ -44,7 +44,8 @@ origen_estacion   INTEGER,
 nombre_origen     TEXT,
 destino_estacion  INTEGER,
 nombre_destino    TEXT,
-tiempo_uso        INTERVAL
+tiempo_uso        INTERVAL,
+PRIMARY KEY(id_usuario,fecha_hora_retiro)
 );
 
 /***************************************************** FUNCTIONS *****************************************************/
@@ -105,7 +106,6 @@ DECLARE
 BEGIN
   OPEN ckey;
   FETCH ckey INTO rckey;
-  EXIT WHEN NOT FOUND;
   FETCH ckey INTO rckey;
   INSERT INTO recorrido_temp (periodo, id_usuario, fecha_hora_retiro,
 	origen_estacion, nombre_origen, destino_estacion, nombre_destino,
@@ -150,7 +150,7 @@ DECLARE
   WHERE ruser_id = id_usuario
   ORDER BY fecha_hora_retiro ASC;
   rctrail RECORD;
-  strats  TIMESTAMP;
+  starts  TIMESTAMP;
   ends    TIMESTAMP;
   greatest_time TIMESTAMP;
   first_station INTEGER;
@@ -159,7 +159,7 @@ DECLARE
 BEGIN
   OPEN ctrail;
   FETCH ctrail INTO rctrail;
-  strats := rctrail.fecha_hora_retiro;
+  starts := rctrail.fecha_hora_retiro;
   ends := rctrail.fecha_hora_retiro + rctrail.tiempo_uso;
   first_station := rctrail.origen_estacion;
   last_station := rctrail.destino_estacion;
@@ -173,8 +173,8 @@ BEGIN
     ELSE
       INSERT INTO recorrido_final(periodo, usuario, fecha_hora_ret,
       est_origen, est_destino, fecha_hora_dev)
-      VALUES(first_period, ruser_id, strats, first_station, last_station, ends);
-      strats := rctrail.fecha_hora_retiro;
+      VALUES(first_period, ruser_id, starts, first_station, last_station, ends);
+      starts := rctrail.fecha_hora_retiro;
       ends := rctrail.fecha_hora_retiro + rctrail.tiempo_uso;
       first_station := rctrail.origen_estacion;
       last_station := rctrail.destino_estacion;
@@ -183,7 +183,7 @@ BEGIN
   END LOOP;
   INSERT INTO recorrido_final(periodo, usuario, fecha_hora_ret,
   est_origen, est_destino, fecha_hora_dev)
-  VALUES(first_period, ruser_id, strats, first_station, last_station, ends);
+  VALUES(first_period, ruser_id, starts, first_station, last_station, ends);
   CLOSE ctrail;
 END;
 $$ LANGUAGE PLPGSQL;
