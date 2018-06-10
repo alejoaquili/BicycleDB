@@ -50,29 +50,43 @@ PRIMARY KEY(id_usuario,fecha_hora_retiro)
 
 /***************************************************** FUNCTIONS *****************************************************/
 
+CREATE OR REPLACE FUNCTION cast_text_to_interval (
+rtime_use IN recorrido_bridge.tiempo_uso%type
+) RETURNS recorrido_temp.tiempo_uso%TYPE AS $$ 
+DECLARE
+new_interval recorrido_temp.tiempo_uso%TYPE;
+BEGIN
+    new_interval := (CAST((SUBSTRING(rtime_use, 0, POSITION('H' IN rtime_use)) || 'hours') AS INTERVAL)
+    + CAST((SUBSTRING(rtime_use, POSITION('H' IN rtime_use) + 2, 
+    POSITION('M' IN rtime_use) - (POSITION('H' IN rtime_use) + 2)) || 'min') AS INTERVAL)
+    + CAST((SUBSTRING(rtime_use, POSITION('M' IN rtime_use) + 4, POSITION('S' IN rtime_use) - (POSITION('M' IN rtime_use) + 4)) || 'second') AS INTERVAL));
+  RETURN new_interval;
+ END;
+  $$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION remove_invalid_null_fields_and_time_used_invalid_format () RETURNS VOID 
 AS $$
-	BEGIN
-	INSERT INTO recorrido_bridge (periodo, id_usuario, fecha_hora_retiro,
-	origen_estacion, nombre_origen, destino_estacion, nombre_destino,
-	tiempo_uso)
-	SELECT periodo, id_usuario, fecha_hora_retiro,
-	origen_estacion, nombre_origen, destino_estacion, nombre_destino,
-	tiempo_uso
-	FROM recorrido_import
-	WHERE id_usuario IS NOT NULL AND fecha_hora_retiro IS NOT NULL and origen_estacion
-	IS NOT NULL AND destino_estacion IS NOT NULL and tiempo_uso IS NOT NULL 
-	AND (tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
-	tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG' or
-	tiempo_uso LIKE '__H _MIN _SEG' or tiempo_uso LIKE '__H _MIN __SEG' or
-	tiempo_uso LIKE '__H __MIN _SEG' or tiempo_uso LIKE '__H __MIN __SEG');
+  BEGIN
+  INSERT INTO recorrido_bridge (periodo, id_usuario, fecha_hora_retiro,
+  origen_estacion, nombre_origen, destino_estacion, nombre_destino,
+  tiempo_uso)
+  SELECT periodo, id_usuario, fecha_hora_retiro,
+  origen_estacion, nombre_origen, destino_estacion, nombre_destino,
+  tiempo_uso
+  FROM recorrido_import
+  WHERE id_usuario IS NOT NULL AND fecha_hora_retiro IS NOT NULL and origen_estacion
+  IS NOT NULL AND destino_estacion IS NOT NULL and tiempo_uso IS NOT NULL 
+  AND (tiempo_uso LIKE '_H _MIN _SEG' or tiempo_uso LIKE '_H _MIN __SEG' or
+  tiempo_uso LIKE '_H __MIN _SEG' or tiempo_uso LIKE '_H __MIN __SEG' or
+  tiempo_uso LIKE '__H _MIN _SEG' or tiempo_uso LIKE '__H _MIN __SEG' or
+  tiempo_uso LIKE '__H __MIN _SEG' or tiempo_uso LIKE '__H __MIN __SEG');
 END; 
 $$ LANGUAGE PLPGSQL;
 
 
 CREATE OR REPLACE FUNCTION cast_time_used_to_interval () RETURNS VOID 
-AS $$	
-	BEGIN
+AS $$ 
+  BEGIN
     INSERT INTO recorrido_temp (periodo, id_usuario, fecha_hora_retiro,
     origen_estacion, nombre_origen, destino_estacion, nombre_destino,
     tiempo_uso)
@@ -83,11 +97,7 @@ AS $$
     nombre_origen,
     destino_estacion,
     nombre_destino,
-
-    ((SUBSTRING(tiempo_uso, 0, POSITION('H' IN tiempo_uso)) || 'hours') :: INTERVAL
-    + (SUBSTRING(tiempo_uso, POSITION('H' IN tiempo_uso) + 2, 
-    POSITION('M' IN tiempo_uso) - (POSITION('H' IN tiempo_uso) + 2)) || 'min') :: INTERVAL
-    +(SUBSTRING(tiempo_uso, POSITION('M' IN tiempo_uso) + 4, POSITION('S' IN tiempo_uso) - (POSITION('M' IN tiempo_uso) + 4)) || 'second'):: INTERVAL) AS tiempo_uso
+    cast_text_to_interval(tiempo_uso) as tiempo_uso
     FROM recorrido_bridge
     WHERE tiempo_uso NOT LIKE '-%' AND (id_usuario, fecha_hora_retiro) NOT IN (SELECT id_usuario, fecha_hora_retiro FROM recorrido_bridge
     GROUP BY id_usuario, fecha_hora_retiro HAVING COUNT(*) > 1 );
@@ -109,12 +119,9 @@ BEGIN
   FETCH ckey INTO rckey;
   FETCH ckey INTO rckey;
   INSERT INTO recorrido_temp (periodo, id_usuario, fecha_hora_retiro,
-	origen_estacion, nombre_origen, destino_estacion, nombre_destino,
-	tiempo_uso) VALUES(rckey.periodo, rckey.id_usuario, rckey.fecha_hora_retiro, rckey. origen_estacion, rckey.nombre_origen, rckey.destino_estacion, rckey.nombre_destino, 
-  ((SUBSTRING(rckey.tiempo_uso, 0, POSITION('H' IN rckey.tiempo_uso)) || 'hours') :: INTERVAL
-	+ (SUBSTRING(rckey.tiempo_uso, POSITION('H' IN rckey.tiempo_uso) + 2, 
-	 POSITION('M' IN rckey.tiempo_uso) - (POSITION('H' IN rckey.tiempo_uso) + 2)) || 'min') :: INTERVAL
-	 +(SUBSTRING(rckey.tiempo_uso, POSITION('M' IN rckey.tiempo_uso) + 4, POSITION('S' IN rckey.tiempo_uso) - (POSITION('M' IN rckey.tiempo_uso) + 4)) || 'second'):: INTERVAL));
+  origen_estacion, nombre_origen, destino_estacion, nombre_destino,
+  tiempo_uso) VALUES(rckey.periodo, rckey.id_usuario, rckey.fecha_hora_retiro, rckey. origen_estacion, rckey.nombre_origen, rckey.destino_estacion, rckey.nombre_destino, 
+        cast_text_to_interval(rckey.tiempo_uso));
   CLOSE ckey;
   RETURN;
 END;
@@ -211,40 +218,40 @@ $$ LANGUAGE PLPGSQL;
 
 CREATE OR REPLACE FUNCTION migration () RETURNS VOID 
 AS $$
-	BEGIN
-	DELETE FROM recorrido_final;
-	PERFORM remove_invalid_null_fields_and_time_used_invalid_format ();
-	PERFORM cast_time_used_to_interval ();
-	PERFORM remove_repeated_keys ();
-	PERFORM remove_interval_overlap ();
-	DROP TABLE recorrido_bridge;
-	DROP TABLE recorrido_temp;
-	DROP TABLE recorrido_import;
+  BEGIN
+  DELETE FROM recorrido_final;
+  PERFORM remove_invalid_null_fields_and_time_used_invalid_format ();
+  PERFORM cast_time_used_to_interval ();
+  PERFORM remove_repeated_keys ();
+  PERFORM remove_interval_overlap ();
+  DROP TABLE recorrido_bridge;
+  DROP TABLE recorrido_temp;
+  DROP TABLE recorrido_import;
 END; 
 $$ LANGUAGE PLPGSQL;
 
 CREATE OR REPLACE FUNCTION validate_intervals () RETURNS TRIGGER 
 AS $$
 DECLARE
-	cval CURSOR FOR
-	SELECT periodo, usuario, fecha_hora_ret , est_origen,
-	est_destino, fecha_hora_dev
-	FROM recorrido_final;
-	rcval RECORD;
+  cval CURSOR FOR
+  SELECT periodo, usuario, fecha_hora_ret , est_origen,
+  est_destino, fecha_hora_dev
+  FROM recorrido_final;
+  rcval RECORD;
 BEGIN
-	OPEN cval;
-	LOOP
-  		FETCH cval INTO rcval;
-		EXIT WHEN NOT FOUND;
-    	IF (new.fecha_hora_ret >= rcval.fecha_hora_ret
-    		AND new.fecha_hora_ret <= rcval.fecha_hora_dev)
-        	OR (rcval.fecha_hora_ret >= new.fecha_hora_ret
-		AND rcval.fecha_hora_ret <= new.fecha_hora_dev) THEN
-			  RAISE EXCEPTION 'INSERCION IMPOSIBLE POR SOLAPAMIENTO';
-		  END IF;
-	END LOOP;
+  OPEN cval;
+  LOOP
+      FETCH cval INTO rcval;
+    EXIT WHEN NOT FOUND;
+      IF (new.fecha_hora_ret >= rcval.fecha_hora_ret
+          AND new.fecha_hora_ret <= rcval.fecha_hora_dev)
+          OR (rcval.fecha_hora_ret >= new.fecha_hora_ret
+          AND rcval.fecha_hora_ret <= new.fecha_hora_dev) THEN
+        RAISE EXCEPTION 'INSERCION IMPOSIBLE POR SOLAPAMIENTO';
+      END IF;
+  END LOOP;
   CLOSE cval;
-	RETURN new;
+  RETURN new;
 END;
 $$ LANGUAGE PLPGSQL;
 
@@ -261,9 +268,12 @@ EXECUTE PROCEDURE validate_intervals ();
 /************************************************* EXECUTION *************************************************/
 
 -- MIGRATION
-SELECT * FROM recorrido_final;
+SELECT * FROM recorrido_final order by usuario asc, fecha_hora_ret asc;
 
 -- TRIGGER-TEST
 INSERT INTO recorrido_final VALUES('201601',8,'2016-01-18 16:28:00',23,23, '2016-01-18 20:28:00');
 INSERT INTO recorrido_final VALUES('201601', 7410, '2016-09-29 11:30:00', 23, 23, '2016-09-29 11:32:00');
 select * FROM recorrido_final;
+
+
+
