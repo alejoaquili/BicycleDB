@@ -12,7 +12,7 @@ nombre_destino    TEXT,
 tiempo_uso        TEXT,
 fecha_creacion    TEXT
 );
-\COPY recorrido_import FROM './CSV Files/test1.csv' CSV HEADER DELIMITER ';';
+\COPY recorrido_import FROM './CSV Files/recorridos-realizados-2016.csv' CSV HEADER DELIMITER ';';
 
 /************************************************* DEFINITIONS *************************************************/
 
