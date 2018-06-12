@@ -236,7 +236,8 @@ DECLARE
   cval CURSOR FOR
   SELECT periodo, usuario, fecha_hora_ret , est_origen,
   est_destino, fecha_hora_dev
-  FROM recorrido_final;
+  FROM recorrido_final
+  WHERE usuario = new.usuario;
   rcval RECORD;
 BEGIN
   OPEN cval;
