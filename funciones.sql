@@ -27,6 +27,8 @@ nombre_destino    TEXT,
 tiempo_uso        TEXT
 );
 
+--DROP TABLE IF EXISTS recorrido_final;
+
 CREATE TABLE recorrido_final
 (periodo        TEXT,
 usuario         INTEGER,
@@ -269,12 +271,10 @@ EXECUTE PROCEDURE validate_intervals ();
 /************************************************* EXECUTION *************************************************/
 
 -- MIGRATION
-SELECT * FROM recorrido_final order by usuario asc, fecha_hora_ret asc;
+SELECT * FROM recorrido_final ORDER BY usuario ASC, fecha_hora_ret ASC;
 
 -- TRIGGER-TEST
 INSERT INTO recorrido_final VALUES('201601',8,'2016-01-18 16:28:00',23,23, '2016-01-18 20:28:00');
-INSERT INTO recorrido_final VALUES('201601', 7410, '2016-09-29 11:30:00', 23, 23, '2016-09-29 11:32:00');
-select * FROM recorrido_final;
-
-
+INSERT INTO recorrido_final VALUES('201601', 74710, '2016-09-29 11:30:00', 23, 23, '2016-09-29 11:32:00');
+SELECT * FROM recorrido_final ORDER BY usuario ASC, fecha_hora_ret ASC;
 
